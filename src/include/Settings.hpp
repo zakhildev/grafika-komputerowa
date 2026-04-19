@@ -9,7 +9,7 @@ public:
   float mouseSensitivity = 0.005f;
 
   bool firstMouse = true;
-  glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, -10.0f);
+  glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 0.0f);
   float cameraYaw = 0.0f;
   float cameraPitch = 0.0f;
   bool keys[512] = {false};

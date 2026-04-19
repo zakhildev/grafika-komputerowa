@@ -1,25 +1,13 @@
-﻿/*
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
+﻿#include "include/Mesh.hpp"
+#include <string>
 #define GLM_FORCE_RADIANS
+#define STB_IMAGE_IMPLEMENTATION
 
 #include "./include/Callbacks.hpp"
-#include "./include/Cube.h"
-#include "./include/Model.hpp"
 #include "./include/Settings.hpp"
-#include "./include/ShaderProgram.h"
+#include "./include/stb_image.h"
+#include "include/Model.hpp"
+#include "include/Shader.hpp"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <OpenGL/glu.h>
@@ -29,27 +17,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glm/gtc/type_ptr.hpp>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/_types/_u_char.h>
+#include <sys/_types/_u_int.h>
+#include <sys/types.h>
 
 using namespace glm;
 using namespace std;
-using namespace SimpleModels;
 using namespace Assimp;
 
-void error_callback(int error, const char *description) {
-  fputs(description, stderr);
-}
-
 void initOpenGLProgram(GLFWwindow *window) {
+  stbi_set_flip_vertically_on_load(true);
   settings.loadFromFile("settings.conf");
   glfwSetCursorPosCallback(window, Callbacks::mouse_callback);
+  glfwSetErrorCallback(Callbacks::error_callback);
   glfwSetKeyCallback(window, Callbacks::key_callback);
   glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  initShaders();
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 }
-
-void freeOpenGLProgram(GLFWwindow *window) { freeShaders(); }
 
 void processInput(GLFWwindow *window) {
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -57,10 +44,8 @@ void processInput(GLFWwindow *window) {
 }
 
 void updateCameraMovement() {
-  // Calculate forward vector from yaw and pitch
-  vec3 forward(cos(settings.cameraPitch) * sin(settings.cameraYaw),
-               sin(settings.cameraPitch),
-               cos(settings.cameraPitch) * cos(settings.cameraYaw));
+  // Calculate forward vector from yaw only (no pitch for vertical movement)
+  vec3 forward(sin(settings.cameraYaw), 0.0f, cos(settings.cameraYaw));
 
   // Right vector (perpendicular to forward, in horizontal plane)
   vec3 right(sin(settings.cameraYaw + M_PI / 2.0f), 0.0f,
@@ -85,57 +70,11 @@ void updateCameraMovement() {
   if (settings.keys[GLFW_KEY_D]) {
     settings.cameraPos -= right * settings.cameraSpeed;
   }
-  // Space - up
-  if (settings.keys[GLFW_KEY_SPACE]) {
-    settings.cameraPos += up * settings.cameraSpeed;
-  }
-  // Left Shift - down
-  if (settings.keys[GLFW_KEY_LEFT_SHIFT]) {
-    settings.cameraPos -= up * settings.cameraSpeed;
-  }
-}
-
-void drawFinger(mat4 base, float rotationDeg) {
-  static Cube c;
-  mat4 fingerSegment = base;
-  fingerSegment =
-      rotate(fingerSegment, radians(-rotationDeg), vec3(0.0f, 0.0f, 1.0f));
-  fingerSegment = translate(fingerSegment, vec3(1.0f, 0.0f, 0.0f));
-  fingerSegment = scale(fingerSegment, vec3(1.0f, 0.25f, 0.5f));
-  glUniformMatrix4fv(spLambert->u("M"), 1, false, value_ptr(fingerSegment));
-  glUniform4f(spLambert->u("color"), 1.0f, 0.0f, 0.0f, 1.0f);
-  c.drawSolid();
-  fingerSegment = translate(fingerSegment, vec3(1.0f, 0.0f, 0.0f));
-
-  mat4 fingerSegment2 = fingerSegment;
-  // przywracamy skalę, aby translacja i rotacja działały poprawnie
-  fingerSegment2 = scale(fingerSegment2, vec3(1.0f, 4.0f, 2.0f));
-  fingerSegment2 =
-      rotate(fingerSegment2, radians(-rotationDeg), vec3(0.0f, 0.0f, 1.0f));
-  fingerSegment2 = translate(fingerSegment2, vec3(1.0f, 0.0f, 0.0f));
-  fingerSegment2 = scale(fingerSegment2, vec3(1.0f, 0.25f, 0.5f));
-  glUniformMatrix4fv(spLambert->u("M"), 1, false, value_ptr(fingerSegment2));
-  glUniform4f(spLambert->u("color"), 0.0f, 1.0f, 0.0f, 1.0f);
-  c.drawSolid();
-  fingerSegment2 = translate(fingerSegment2, vec3(1.0f, 0.0f, 0.0f));
-
-  mat4 fingerSegment3 = fingerSegment2;
-  // przywracamy skalę, aby translacja i rotacja działały poprawnie
-  fingerSegment3 = scale(fingerSegment3, vec3(1.0f, 4.0f, 2.0f));
-  fingerSegment3 =
-      rotate(fingerSegment3, radians(-rotationDeg), vec3(0.0f, 0.0f, 1.0f));
-  fingerSegment3 = translate(fingerSegment3, vec3(1.0f, 0.0f, 0.0f));
-  fingerSegment3 = scale(fingerSegment3, vec3(1.0f, 0.25f, 0.5f));
-  glUniformMatrix4fv(spLambert->u("M"), 1, false, value_ptr(fingerSegment3));
-  glUniform4f(spLambert->u("color"), 0.0f, 0.0f, 1.0f, 1.0f);
-  c.drawSolid();
 }
 
 int main(void) {
   GLFWwindow *window;
   Importer importer;
-
-  glfwSetErrorCallback(error_callback);
 
   if (!glfwInit()) {
     fprintf(stderr, "Can't initialize GLFW.\n");
@@ -153,7 +92,7 @@ int main(void) {
   // Disable window resizing to simplify things
   glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
-  window = glfwCreateWindow(720, 720, "Alcohol Gallery", NULL, NULL);
+  window = glfwCreateWindow(1080, 1080, "Alcohol Gallery", NULL, NULL);
 
   if (!window) {
     glfwTerminate();
@@ -171,58 +110,82 @@ int main(void) {
 
   initOpenGLProgram(window);
 
-  // Projection matrix is fixed
-  static mat4 P = perspective(radians(50.0f), 1.0f, 1.0f, 50.0f);
-
   while (!glfwWindowShouldClose(window)) {
     processInput(window);
     updateCameraMovement();
+    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    static Model pedestal;
-    pedestal.loadModel("./models/Pedestal_A.glb");
+    static Shader defautlShader("shaders/default.vert", "shaders/default.frag");
 
-    // Zadanie na laby: Rysowanie ręki robota
-    static Cube c;
+    static Model pedestal("models/pedestal/pedestal.obj");
 
-    // Calculate view matrix based on camera position and rotation
-    vec3 forward(cos(settings.cameraPitch) * sin(settings.cameraYaw),
-                 sin(settings.cameraPitch),
-                 cos(settings.cameraPitch) * cos(settings.cameraYaw));
-    mat4 V = lookAt(settings.cameraPos, settings.cameraPos + forward,
-                    vec3(0.0f, 1.0f, 0.0f));
-
-    spLambert->use();
-    glUniformMatrix4fv(spLambert->u("P"), 1, false, value_ptr(P));
-    glUniformMatrix4fv(spLambert->u("V"), 1, false, value_ptr(V));
-    glUniform4f(spLambert->u("color"), 1.0f, 0.0f, 1.0f, 1.0f);
-
-    mat4 pedestalBase = mat4(1.0f);
-    pedestalBase = translate(pedestalBase, vec3(0.0f, -5.0f, 0.0f));
-    glUniformMatrix4fv(spLambert->u("M"), 1, false, value_ptr(pedestalBase));
-    pedestal.Draw();
-
-    // Dłoń
-    mat4 metacarpus = mat4(1.0f);
-    metacarpus = scale(metacarpus, vec3(0.5f, 0.25f, 0.5f));
-    glUniformMatrix4fv(spLambert->u("M"), 1, false, value_ptr(metacarpus));
-    glUniform4f(spLambert->u("color"), 1.0f, 1.0f, 1.0f, 1.0f);
-    c.drawSolid();
-
-    // Palce
-    // Kąt zginania palców zmienia się w czasie
-    float bendingAngle = (sin(glfwGetTime()) + 1.0f) * 20.0f;
-    for (float deg = 0.0f; deg < 360.0f; deg += 90.0f) {
-      mat4 fingerBase =
-          rotate(mat4(1.0f), radians(deg), vec3(0.0f, 1.0f, 0.0f));
-      fingerBase = translate(fingerBase, vec3(0.5f, 0.0f, 0.0f));
-      drawFinger(fingerBase, bendingAngle);
+    static vector<Model> bottles = {};
+    static bool bottlesLoaded = false;
+    if (!bottlesLoaded) {
+      for (int i = 1; i <= 3; i++) {
+        string path = "models/bottles/bottle" + to_string(i) + ".obj";
+        Model bottle(path.c_str());
+        bottles.push_back(bottle);
+      }
     }
+    bottlesLoaded = true;
+
+    static mat4 P = perspective(radians(50.0f), 1.0f, 0.1f, 50.0f);
+
+    mat4 V =
+        lookAt(settings.cameraPos,
+               settings.cameraPos +
+                   vec3(sin(settings.cameraYaw) * cos(settings.cameraPitch),
+                        sin(settings.cameraPitch),
+                        cos(settings.cameraYaw) * cos(settings.cameraPitch)),
+               vec3(0.0f, 1.0f, 0.0f));
+
+    defautlShader.use();
+    defautlShader.setMat4("P", P);
+    defautlShader.setMat4("V", V);
+    defautlShader.setVec3("viewPos", settings.cameraPos);
+
+    // Bottles and pedestal rednering
+    for (int i = 0; i < 10; i++) {
+      mat4 M = mat4(1.0f);
+      if (i <= 4) {
+        M = translate(M, vec3(-5.0f + (i * 2.5f), 0.0f, 3.0f));
+      } else {
+        M = translate(M, vec3(-5.0f + ((i - 5) * 2.5f), 0.0f, -3.0f));
+      }
+
+      defautlShader.setMat4("M", M);
+      pedestal.Draw(defautlShader);
+
+      M = translate(M, vec3(0.0f, 0.8f, 0.0f));
+      defautlShader.setMat4("M", M);
+      bottles[i % bottles.size()].Draw(defautlShader);
+    }
+
+    // Floor rendering (texcoord multiplied by 8 to "shrink" the texture)
+    vector<Vertex> floorVertices = {
+        {{-8.0f, 0.0f, -6.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+        {{8.0f, 0.0f, -6.0f}, {0.0f, 1.0f, 0.0f}, {8.0f, 0.0f}},
+        {{8.0f, 0.0f, 6.0f}, {0.0f, 1.0f, 0.0f}, {8.0f, 6.0f}},
+        {{-8.0f, 0.0f, 6.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 6.0f}}};
+
+    vector<uint> floorIndices = {0, 1, 2, 0, 2, 3};
+
+    // Texture loaded from png file not from model data
+    // Maked as static to load only once
+    static vector<Texture> floorTextures = {
+        {TextureFromFile("floor.png", "textures"), "diffuse", "floor.png"}};
+
+    Mesh floor(floorVertices, floorIndices, floorTextures);
+    mat4 floorM = mat4(1.0f);
+    floorM = translate(floorM, vec3(0.0f, -1.0f, 0.0f));
+    defautlShader.setMat4("M", floorM);
+    floor.Draw(defautlShader);
 
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
-  freeOpenGLProgram(window);
 
   glfwDestroyWindow(window); // Delete OpenGL context and the window.
   glfwTerminate();           // Free GLFW resources
